@@ -1,0 +1,1682 @@
+# OpenCode: The Complete Beginner's Guide v2
+
+> **Who this is for**: You know how to code a bit, but you've never used an AI coding agent before.
+> You've heard of "vibe coding" or "agentic coding" and want to understand what the hype is about.
+>
+> By the end of this guide you'll have OpenCode installed, configured, and you'll
+> understand every piece well enough to teach it to someone else.
+
+---
+
+## Table of Contents
+
+1. [What Is an AI Coding Agent?](#1-what-is-an-ai-coding-agent)
+2. [Installing OpenCode](#2-installing-opencode)
+3. [Your First Config File](#3-your-first-config-file)
+4. [Global vs. Project Config](#4-global-vs-project-config)
+5. [CLI Settings: cli.json](#5-cli-settings-clijson)
+6. [The TUI: Your Main Workspace](#6-the-tui-your-main-workspace)
+7. [OpenCode Run: One-Shot Prompts](#7-opencode-run-one-shot-prompts)
+8. [Providers and Models](#8-providers-and-models)
+9. [Model Costs and Payment](#9-model-costs-and-payment)
+10. [Reasoning and Variants](#10-reasoning-and-variants)
+11. [GUI Clients: Web and Desktop](#11-gui-clients-web-and-desktop)
+12. [Mobile and Remote](#12-mobile-and-remote)
+13. [Tools: How the Agent Does Stuff](#13-tools-how-the-agent-does-stuff)
+14. [Built-in Tools](#14-built-in-tools)
+15. [Skills: Reusable Instructions](#15-skills-reusable-instructions)
+16. [Agents: Specialized Personalities](#16-agents-specialized-personalities)
+17. [Context: How the Model Sees Your Codebase](#17-context-how-the-model-sees-your-codebase)
+18. [Custom Tools via Plugins](#18-custom-tools-via-plugins)
+19. [Tool Permissions](#19-tool-permissions)
+20. [Sandboxing](#20-sandboxing)
+21. [Connecting Providers](#21-connecting-providers)
+22. [End-to-End Practical Example](#22-end-to-end-practical-example)
+
+---
+
+## 1. What Is an AI Coding Agent?
+
+You've used ChatGPT or Claude before. You type a question, it types an answer. That's a **chatbot**.
+
+An **AI coding agent** is different. It's a chatbot that can **do things** on your computer:
+
+- Read and write files
+- Run terminal commands
+- Search your codebase
+- Install packages
+- Run tests
+- Push to GitHub
+
+Instead of saying *"You should run `git push` now"*, the agent just **does it**.
+
+### How It Works (The Simple Version)
+
+```
+You: "Fix the login bug on line 42"
+        │
+        ▼
+  ┌─────────────────┐
+  │   OpenCode       │  The "agent harness"
+  │   (agent harness)│
+  └────────┬────────┘
+           │ decides to read the file
+           ▼
+  ┌─────────────────┐
+  │   read tool      │  Fetches the file contents
+  └────────┬────────┘
+           │ sends file back to the LLM
+           ▼
+  ┌─────────────────┐
+  │   LLM "brain"    │  Analyzes the bug, plans the fix
+  └────────┬────────┘
+           │ decides to edit the file
+           ▼
+  ┌─────────────────┐
+  │   edit tool      │  Applies the change
+  └────────┬────────┘
+           │ result goes back to LLM
+           ▼
+  ┌─────────────────┐
+  │   shell tool     │  Runs the tests to confirm
+  └────────┬────────┘
+           │
+           ▼
+You: ✅ Bug fixed, tests pass
+```
+
+The **LLM** (the brain) decides *what* to do. The **agent harness** (OpenCode) actually *does* it.
+
+---
+
+## 2. Installing OpenCode
+
+OpenCode runs on macOS, Linux, and Windows (via WSL 2).
+
+### Install Script
+
+```bash
+curl -fsSL https://opencode.ai/install | bash
+```
+
+After installation, restart your terminal or run:
+
+```bash
+source ~/.bashrc   # or ~/.zshrc if you use zsh
+```
+
+### Verify It Works
+
+```bash
+opencode --version
+```
+
+You should see something like `2.3.0`.
+
+### First Launch
+
+```bash
+opencode
+```
+
+This opens the TUI (Terminal User Interface). You'll see a chat window.
+Type `/help` to see available commands.
+
+> **Don't worry if nothing happens yet** — you need to configure a model first.
+> We'll do that next.
+
+---
+
+## 3. Your First Config File
+
+OpenCode uses a config file called `opencode.jsonc` in your project folder.
+
+> **JSONC** = JSON with Comments (and trailing commas). It's just JSON but
+> friendlier for humans.
+
+### Minimal Config
+
+Create this file in your project root:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/deepseek-v4.1-flash-free",
+}
+```
+
+That's it. Two fields:
+
+| Field | Purpose |
+|---|---|
+| `$schema` | Lets your editor give you autocomplete and validation |
+| `model` | The default AI model OpenCode will use |
+
+### Practical Example: Create Your First Config
+
+Let's create an `opencode.jsonc` for this project (the Sloperator repo):
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/deepseek-v4.1-flash-free",
+  "permissions": [
+    {
+      "action": "shell",
+      "resource": "git push *",
+      "effect": "ask",
+    },
+  ],
+}
+```
+
+**What this does:**
+- Uses the free DeepSeek model (costs $0)
+- Asks you for permission before running `git push`
+- Everything else is allowed by default
+
+### Try It Yourself
+
+1. Create `opencode.jsonc` in a project folder with the content above
+2. Open OpenCode with `opencode`
+3. Type: *"What model am I using?"*
+4. The agent should read your config and tell you
+
+> **Config changes apply immediately** — OpenCode watches this file and hot-reloads
+> when you save. No restart needed. If you ever need to force a full reload,
+> use the `/reload` command in the TUI.
+
+---
+
+## 4. Global vs. Project Config
+
+You can have **two levels** of config:
+
+| Location | File | Purpose |
+|---|---|---|
+| Your home directory | `~/.config/opencode/opencode.jsonc` | Personal settings (your API keys, your preferred model) |
+| Project directory | `./opencode.jsonc` | Team settings (permissions, MCP servers, project-specific config) |
+
+Project settings override global settings for matching fields. Unrelated settings from both files remain active.
+
+### System Config Directory
+
+For machine-wide settings that apply to every user on the computer, use the system config directory:
+
+| Platform | Directory |
+|---|---|
+| macOS | `/Library/Application Support/opencode` |
+| Linux | `/etc/opencode` |
+| Windows | `%ProgramData%\opencode` |
+
+It works like the global directory — it loads `opencode.json(c)`, `agents/`, `commands/`, `skills/`, and `plugins/`:
+
+```
+/etc/opencode/
+├── opencode.json
+├── agents/review.md
+├── commands/release.md
+└── skills/deploy/SKILL.md
+```
+
+### Should You Gitignore the Config?
+
+**Project-level config should be checked in.** It's for things that apply to the whole team.
+Personal settings (API keys, etc.) go in your global config.
+
+### Environment Variable Substitution
+
+Never commit secrets. Use `{env:VARIABLE}` or `{file:path}` instead:
+
+```jsonc
+{
+  "providers": {
+    "anthropic": {
+      "settings": {
+        "apiKey": "{env:ANTHROPIC_API_KEY}",
+      },
+    },
+    "openai": {
+      "settings": {
+        "apiKey": "{file:~/.secrets/openai-key}",
+      },
+    },
+  },
+}
+```
+
+### Practical Example: Split Your Config
+
+**Global** (`~/.config/opencode/opencode.jsonc`):
+
+```jsonc
+{
+  "model": "opencode/deepseek-v4.1-flash-free",
+}
+```
+
+**Project** (`./opencode.jsonc`):
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "permissions": [
+    { "action": "shell", "resource": "deploy *", "effect": "ask" },
+  ],
+}
+```
+
+Now you use your preferred model everywhere, but the deploy command only needs approval in this specific project.
+
+---
+
+## 5. CLI Settings: cli.json
+
+The `opencode.jsonc` file configures the **agent**, but your **terminal experience** — theme, keybindings, diff display, scroll behavior — is configured separately in `cli.json`.
+
+### Where It Lives
+
+```bash
+~/.config/opencode/cli.json
+```
+
+### What It Controls
+
+| Setting | What it does | Example |
+|---|---|---|
+| `theme` | Color scheme (tokyonight, catppuccin, etc.) | `{ "name": "tokyonight", "mode": "system" }` |
+| `keybinds` | Custom keyboard shortcuts | Bind `Ctrl+P` to open settings |
+| `diffs` | How code diffs are displayed | `{ "view": "auto", "wrap": "word" }` |
+| `scroll` | Scroll speed and acceleration | `{ "speed": 2, "acceleration": true }` |
+
+### Example cli.json
+
+```json
+{
+  "theme": {
+    "name": "tokyonight",
+    "mode": "system"
+  },
+  "scroll": {
+    "speed": 2,
+    "acceleration": true
+  },
+  "diffs": {
+    "view": "auto",
+    "wrap": "word"
+  }
+}
+```
+
+### How to Change It
+
+You rarely edit this file by hand. In the TUI:
+
+1. Press `Ctrl+P` to open the command palette
+2. Select **Open settings**
+3. Change theme, keybinds, etc. through the UI
+4. OpenCode saves the changes to `cli.json` automatically
+
+---
+
+## 6. The TUI: Your Main Workspace
+
+When you run `opencode`, you enter the **TUI** (Terminal User Interface).
+This is where you'll spend 90% of your time.
+
+### Key Controls
+
+| Key | Action |
+|---|---|
+| Type a message | Chat with the agent |
+| `Ctrl+P` | Open settings / command palette |
+| `Ctrl+T` | Cycle through model variants |
+| `Ctrl+C` | Cancel the current response |
+| `/help` | List all commands |
+
+### Your First Session
+
+1. Run `opencode` from your project folder
+2. Type: *"List all the files in this project"*
+3. Watch the agent use `shell` to run `ls` and report back
+4. Then ask: *"What does the README say?"*
+5. Watch it use `read` to open the file
+
+**What you're seeing:** The agent is not just generating text — it's actually
+running commands on your computer.
+
+### The Sidebar
+
+On the right side of the TUI you'll see:
+
+```
+Context
+147,529 tokens
+37% used
+$5.56 spent
+```
+
+This shows:
+- **Tokens**: How much text the model is processing
+- **% used**: How much of the context window is full
+- **Spent**: Estimated cost of this session so far
+
+---
+
+## 7. OpenCode Run: One-Shot Prompts
+
+Sometimes you don't want the full TUI. You just want to ask something and get
+an answer in your terminal. That's `opencode run`.
+
+### Basic Usage
+
+```bash
+opencode run "Explain how our auth middleware works"
+```
+
+The agent reads files, uses tools, and prints the answer to stdout. No TUI opens.
+
+### Practical Example: Generate a File
+
+```bash
+opencode run --model "opencode/deepseek-v4.1-flash-free" \
+  "Create a file called hello.py that prints 'Hello, OpenCode!'"
+```
+
+This creates `hello.py` without ever opening the TUI.
+
+### Continue a Previous Run
+
+If the first result needs a correction, use `--continue`:
+
+```bash
+opencode run "Add error handling to the login function"
+# Review the result, then:
+opencode run --continue "Also add input validation"
+```
+
+### JSON Format Output
+
+If another program needs structured events instead of plain text:
+
+```bash
+opencode run "Summarize this project" --format json > result.json
+```
+
+### Redirecting Output
+
+Assistant messages go to stdout, progress goes to stderr:
+
+```bash
+opencode run "Summarize this project" > project-summary.md
+```
+
+### Adversarial Review Pattern
+
+A powerful technique: have one model review another's work.
+
+```bash
+# Step 1: Have the default model write code
+opencode run "Write a function that sorts a list of numbers"
+
+# Step 2: Have a different model review it
+opencode run --model "anthropic/claude-sonnet-5-5" \
+  "Review the code from the previous run for bugs"
+```
+
+### Practical Example: Create a SlopLang Example
+
+```bash
+opencode run --model "opencode/deepseek-v4.1-flash-free" \
+  "Create examples/arithmetic.slop that prints 1 + 2 * 3.
+   Run it and confirm it prints 7."
+```
+
+The agent will:
+1. Read `docs/spec.md` to learn the language
+2. Create the file
+3. Run it with the interpreter
+4. Confirm the output is 7
+
+---
+
+## 8. Providers and Models
+
+This is the most important concept to understand. **Provider** and **model** are
+different things, and confusing them leads to bad decisions.
+
+### Provider vs. Model
+
+| Concept | What it is | Examples |
+|---|---|---|
+| **Provider** | The company/service you access the model through | OpenAI, Anthropic, Google, OpenCode Go |
+| **Model** | The specific AI brain you're using | `gpt-5`, `claude-sonnet-4-5`, `deepseek-v4.1-flash-free` |
+
+In OpenCode config, you write: **`provider_id/model_id`**
+
+```
+opencode/deepseek-v4.1-flash-free
+anthropic/claude-sonnet-5-5
+openai/gpt-5
+```
+
+### The Same Model Can Come From Different Providers
+
+`anthropic/claude-sonnet-4-5` and `opencode/claude-sonnet-4-5` are both valid.
+The model is the same brain. The provider determines pricing, latency, and privacy.
+
+### Why It Matters
+
+- **Model** determines raw capability (can it solve this problem?)
+- **Provider** determines the experience (cost, speed, rate limits, uptime)
+
+### Practical Example: Switch Models Mid-Session
+
+1. In the TUI, type `/models`
+2. You'll see a list of available models
+3. Pick a different one
+4. The session continues with the new brain
+
+You can switch mid-conversation. Expensive models for hard problems,
+cheap models for simple tasks.
+
+### Practical Example: List Available Models
+
+```bash
+opencode models
+```
+
+This shows every model available to you, grouped by provider.
+
+---
+
+## 9. Model Costs and Payment
+
+Models aren't free (except the one we're using in this course).
+Understanding pricing helps you avoid bill shock.
+
+### How Pricing Works
+
+You pay for **tokens**, not time.
+
+| What's a token? | Roughly ¾ of a word in English |
+|---|---|
+| **Input tokens** | What you send to the model (code, context, instructions) |
+| **Output tokens** | What the model generates (answers, code) |
+
+### Representative Prices
+
+| Model | Input (per 1M tokens) | Output (per 1M tokens) |
+|---|---|---|
+| DeepSeek V4.1 Flash Free | Free | Free |
+| GPT-6 Luna | $0.10 | $0.50 |
+| Claude Haiku 5.5 | $0.10 | $0.50 |
+| Claude Opus 5 | $4.00 | $20.00 |
+| Claude Fable 5.1 | $10.00 | $50.00 |
+
+### Why Input Costs Dominate in Agentic Coding
+
+You'd think output is more expensive (and per-token, it is). But in practice:
+
+- The agent sends **massive context**: files, codebase, instructions, tool schemas
+- The agent's response is often **short**: a function change, a command, a tool call
+- Multi-turn loops resend large portions of context every step
+
+Result: 50,000–100,000 input tokens to write 200 output tokens.
+
+### Payment Strategies
+
+| Strategy | Best for |
+|---|---|
+| **Pay-per-token** | Light/occasional use. You only pay for what you use. |
+| **Subscription** | Heavy daily use. Flat monthly fee ($100–500/month). |
+
+### Practical Example: Estimate a Session Cost
+
+A typical coding session:
+
+```
+Turn 1: Send 50,000 tokens (context + file) → Receive 200 tokens (tool call)
+Turn 2: Send 55,000 tokens (context + file result) → Receive 150 tokens (edit)
+Turn 3: Send 58,000 tokens (context + edit result) → Receive 300 tokens (answer)
+
+Total input: ~163,000 tokens
+Total output: ~650 tokens
+```
+
+With Claude Haiku 5.5 ($0.10/$0.50 per million):
+- Input cost: 163,000 × $0.10 / 1,000,000 = **$0.016**
+- Output cost: 650 × $0.50 / 1,000,000 = **$0.0003**
+- **Total: ~$0.02**
+
+### Open-Weight Models
+
+Some models are **open-weight** — their trained parameters (the "weights")
+are available to download and run yourself. MiniMax-M3 and Qwen3-Coder
+are examples.
+
+Open-weight is similar to open-source software, but not quite the same.
+The training data and training process can still be private. So while you
+can run and fine-tune the model, you can't reproduce it from scratch.
+
+**What are weights?** At a high level:
+
+1. Gather a massive dataset (Reddit, GitHub, Wikipedia, etc.)
+2. Run that text through a training process that adjusts the model's
+   internal parameters (its "weights") to reduce prediction error
+3. The end result is a giant file of numbers that encode the patterns
+   the model learned
+
+**Training costs** vs **Inference costs**:
+
+| Cost type | What it is | Who pays |
+|---|---|---|
+| **Training** | Turning data into weights (GPU clusters for weeks) | The lab (Anthropic, Meta, etc.) — hundreds of millions $ |
+| **Inference** | Using the trained model to generate predictions | You — per-token or subscription |
+
+When you self-host an open-weight model, you cover your own hardware
+and electricity. No per-token fees, no subscription.
+
+---
+
+## 10. Reasoning and Variants
+
+Some models can "think out loud" before answering. This is called **reasoning**
+or **chain-of-thought**.
+
+### What Reasoning Does
+
+Without reasoning: `"2 + 2 = 4"` (instant answer)
+With reasoning: `"Let me think... 2 + 2... that's 4"` (thought process + answer)
+
+For hard problems (math, logic, complex code), reasoning helps a lot.
+For simple problems, it's wasted tokens and time.
+
+### Variants
+
+OpenCode exposes reasoning settings through **variants**. A variant is a named
+configuration for a model.
+
+Common variants:
+
+| Variant | Reasoning Effort | When to Use |
+|---|---|---|
+| `low` | Minimal | Simple tasks, quick answers |
+| `high` | Moderate | Normal coding work |
+| `max` | Maximum | Hard problems, debugging |
+
+### Switching Variants
+
+- `Ctrl+T` in the TUI cycles through available variants
+- `/thinking` shows a selection list
+
+### Practical Example: Use High Reasoning to Fix a Bug
+
+1. Set variant to `high` with `Ctrl+T`
+2. Ask the agent: *"Fix the division bug in Sloperator — -7 / 2 should give -3,
+   not -4"*
+3. The agent will use more "brain power" to analyze the code correctly
+4. After it's done, use `Ctrl+T` to return to your default variant
+
+### Fast Mode
+
+OpenAI and Claude also offer **fast mode**, which tells the provider to process
+tokens more quickly — at a higher price per token.
+
+If you're on a subscription plan and not using your full quota, fast mode
+is a no-brainer. The agent responds faster, and you're already paying
+the flat fee.
+
+### Custom Variants
+
+You can define your own in config:
+
+```jsonc
+{
+  "providers": {
+    "openai": {
+      "models": {
+        "gpt-5": {
+          "variants": [
+            {
+              "id": "poindexter",
+              "settings": {
+                "reasoningEffort": "high",
+                "textVerbosity": "high",
+              },
+            },
+            {
+              "id": "grug",
+              "settings": {
+                "reasoningEffort": "low",
+              },
+            },
+          ],
+        },
+      },
+    },
+  },
+}
+```
+
+---
+
+## 11. GUI Clients: Web and Desktop
+
+OpenCode isn't just a TUI. The agent runs as a **background server** on your
+machine, and you can connect to it with different **clients**.
+
+### The Architecture
+
+```
+┌──────────────────────┐
+│  OpenCode Server      │  Runs on your machine (always)
+│  (background service) │
+└──────┬───────────────┘
+       │
+       ├── TUI (opencode)      — Your terminal
+       ├── Web UI (browser)    — opencode pair
+       └── Desktop App         — Native app
+```
+
+### Web UI
+
+```bash
+opencode pair
+```
+
+This gives you a link. Open it in any browser — even on your phone.
+The Web UI is great for:
+- Quick reviews on mobile
+- Sharing your screen with someone
+- Working from any computer
+
+### Desktop App
+
+A native app for macOS, Linux, and Windows. Same interface as the Web UI, but:
+- Can access your filesystem natively
+- Drag-and-drop files
+- "Reveal in Finder"
+- Auto-updates
+
+### Which Client Should You Use?
+
+| Client | Good for | Tradeoff |
+|---|---|---|
+| TUI (`opencode`) | Scripting, SSH, speed | Weak for visual diffs |
+| Web UI (`opencode pair`) | Mobile, sharing | Browser can't touch filesystem |
+| Desktop | Native file handling, images | Doesn't run on phone |
+
+### Practical Example: Use the Web UI
+
+1. Run `opencode pair` in your terminal
+2. Open the link in your phone's browser
+3. Under "Projects," open the Sloperator repo
+4. Check the model selector (may differ from your TUI model)
+5. Ask: *"Create examples/grouping.slop that prints (1 + 2) * 3"*
+6. Confirm it prints 9
+
+---
+
+## 12. Mobile and Remote
+
+### Coding From Your Phone
+
+One of the best parts of AI coding: you can keep working from anywhere.
+
+```bash
+opencode pair --remote
+```
+
+This creates an **OpenTunnel** connection. Scan the QR code with your phone
+and you're connected.
+
+```
+┌──────────────┐         ┌──────────────────┐
+│ Your computer │ ◄────► │ Your phone        │
+│ (agent runs)  │ Tunnel │ (chat interface)  │
+└──────────────┘         └──────────────────┘
+```
+
+### Remote Server
+
+You can also run OpenCode on a different machine entirely:
+
+```bash
+# On the remote machine:
+OPENCODE_PASSWORD="your-password" opencode serve --hostname 0.0.0.0 --port 4096
+
+# On your local machine:
+OPENCODE_PASSWORD="your-password" opencode --server http://<hostname>:4096
+```
+
+This is useful for:
+- A powerful cloud VM
+- A Raspberry Pi at home
+- A beefy desktop you SSH into
+
+### Practical Example: Full Mobile Workflow
+
+1. Start a session on your computer: *"What's the meaning of life?"*
+2. Open the same session on your phone
+3. Ask a follow-up: *"When did it change from 42 to 6-7?"*
+4. Notice both terminals stay in sync
+
+---
+
+## 13. Tools: How the Agent Does Stuff
+
+Without tools, an LLM is just a text generator. It can *suggest* things,
+but it can't *do* things. **Tools** are how the agent acts on the world.
+
+### What Is a Tool?
+
+A tool is a function the model can call. For example:
+
+```
+Tool: read
+Input: { "path": "main.py" }
+Output: The contents of main.py
+```
+
+When the model decides it needs to read a file, it generates:
+
+```json
+{
+  "tool": "read",
+  "args": {
+    "path": "main.py"
+  }
+}
+```
+
+OpenCode parses this, runs the tool, and sends the result back to the model.
+
+### The Tool Loop
+
+```
+1. Model decides: "I need to read main.py"
+2. Model generates: tool call JSON
+3. OpenCode runs: read("main.py")
+4. OpenCode sends: file contents back to model
+5. Model decides: "I need to edit line 42"
+6. Model generates: another tool call JSON
+7. ...repeat until done
+```
+
+### Why Specialized Tools Beat Bash
+
+"Why not just `cat` everything?" Because specialized tools are better:
+
+| Tool | Instead of | Why better |
+|---|---|---|
+| `read` | `cat file.py` | Permission-aware, workspace-aware |
+| `grep` | `grep -r "pattern"` | Returns structured results, permission-aware |
+| `webfetch` | `curl URL` | Converts HTML to Markdown (more token-efficient) |
+| `edit` | `sed -i` | Precise, safe, shows diffs |
+
+### Practical Example: Watch the Tool Loop
+
+1. Tell OpenCode: *"Find where Sloperator decides that * happens before +"*
+2. Watch it use `grep` to search the codebase
+3. Watch it use `read` to open the parser file
+4. Watch it use `write` or `edit` to add a test
+5. Watch it use `shell` to run the tests
+
+You're seeing the **tool loop** in action.
+
+---
+
+## 14. Built-in Tools
+
+OpenCode ships with these built-in tools:
+
+### Context-Gathering Tools
+
+| Tool | What it does | Example |
+|---|---|---|
+| `read` | Read a file | `read("main.py")` |
+| `glob` | Find files by pattern | `glob("**/*.py")` |
+| `grep` | Search file contents | `grep("def main")` |
+| `webfetch` | Fetch a URL | `webfetch("https://example.com")` |
+| `websearch` | Search the web | `websearch("python recursion example")` |
+
+### File-Modification Tools
+
+| Tool | What it does | Example |
+|---|---|---|
+| `write` | Create or overwrite a file | `write("hello.py", "print('hi')")` |
+| `edit` | Make a targeted change | `edit("main.py", oldString, newString)` |
+| `patch` | Apply a diff | `patch("fix.diff")` |
+
+### Action Tools
+
+| Tool | What it does | Example |
+|---|---|---|
+| `shell` | Run a command | `shell("pytest")` |
+| `question` | Ask you for input | Shows a picker UI |
+| `skill` | Load reusable instructions | `skill("deploy")` |
+| `subagent` | Spawn a child agent | `subagent("review this code")` |
+
+### Practical Example: Use Each Tool
+
+Tell OpenCode to do this step by step:
+
+1. **read**: *"Read the README.md"*
+2. **glob**: *"Find all .slop files in examples/"*
+3. **grep**: *"Search for 'division' in the codebase"*
+4. **write**: *"Create a test file"*
+5. **edit**: *"Fix the typo in unexpected charcter"*
+6. **shell**: *"Run the tests"*
+
+Watch which tool it uses for each step.
+
+### Why Specialized Tools Beat Bash
+
+It's tempting to think: *"Bash can do almost anything, so why not just `cat`
+and `curl`?"*
+
+Specialized tools are better because:
+
+| Tool | Instead of | Why better |
+|---|---|---|
+| `read` | `cat file.py` | Permission-aware, workspace-aware, structured output |
+| `grep` | `grep -r "pattern"` | Returns structured results the model can parse easily |
+| `webfetch` | `curl URL` | Converts HTML to Markdown (10x more token-efficient) |
+| `edit` | `sed -i` | Precise, safe, shows diffs before applying |
+
+**Bash is still the escape hatch.** When no specialized tool exists, the
+shell tool lets the agent do anything on your command line. Specialized
+tools are the paved path; bash is the dirt road that goes everywhere.
+
+---
+
+## 15. Skills: Reusable Instructions
+
+A **skill** is a reusable set of instructions you can load into any session.
+Think of it as a "playbook" for a specific task.
+
+### Why Skills Matter
+
+Without skills, you have to re-explain context every time:
+
+- *"Remember, we use Prettier with semicolons"*
+- *"Our deploy process is: build, test, tag, push"*
+- *"When reviewing code, check for these 5 things"*
+
+With skills, you write it once and load it on demand.
+
+### How Skills Work
+
+A skill is a Markdown file — usually called `SKILL.md` — stored in
+`.opencode/skills/<skill-name>/`.
+
+```
+.opencode/
+└── skills/
+    └── deploy/
+        └── SKILL.md    ← The instructions
+```
+
+The agent loads the skill with the `skill` tool, and the instructions
+are injected into the model's context as if you'd typed them yourself.
+
+### Practical Example: Create a "Code Review" Skill
+
+**Step 1: Create the skill file**
+
+`.opencode/skills/review/SKILL.md`:
+
+```markdown
+# Code Review Checklist
+
+When reviewing code, check these things in order:
+
+1. **Correctness**: Does the code do what it says?
+2. **Edge cases**: What happens with empty input, null values, or boundary conditions?
+3. **Error handling**: Are errors caught and reported clearly?
+4. **Naming**: Do variable and function names explain intent?
+5. **Tests**: Is there a test for the new behavior? Does it pass?
+6. **Security**: Could this introduce a vulnerability?
+```
+
+**Step 2: Use the skill in a session**
+
+Ask the agent: *"Use the review skill to check the latest changes"*
+
+The agent calls `skill("review")`, which loads the SKILL.md content,
+and then follows the checklist when reviewing.
+
+### Practical Example: Create a "Deploy" Skill
+
+`.opencode/skills/deploy/SKILL.md`:
+
+```markdown
+# Deploy Process
+
+Follow these steps in order:
+
+1. Run `uv run pytest -q` — all tests must pass
+2. Bump the version in `pyproject.toml`
+3. Create a git tag: `git tag v$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")`
+4. Push: `git push && git push --tags`
+5. Build: `uv build`
+6. Publish: `uv publish`
+```
+
+Now you can say: *"Deploy the latest version"* and the agent knows every step.
+
+### Where Skills Live
+
+| Location | Scope | Loaded |
+|---|---|---|
+| `.opencode/skills/<name>/SKILL.md` | Project | Automatically discoverable |
+| `~/.config/opencode/skills/<name>/SKILL.md` | Your machine (all projects) | Automatically discoverable |
+| Any path in `opencode.jsonc` | Project | Manually referenced |
+
+### Auto-Invoke Skills
+
+You can make a skill load automatically in every session:
+
+```jsonc
+{
+  "skills": {
+    "review": {
+      "autoinvoke": true,
+    },
+  },
+}
+```
+
+Now the review checklist is always in the model's context without being asked.
+
+---
+
+## 16. Agents: Specialized Personalities
+
+An **agent** is a named configuration that changes how OpenCode behaves.
+Think of it as a "mode" or "persona" for the assistant.
+
+### Why Multiple Agents?
+
+Different tasks need different approaches:
+
+| Task | Agent Personality |
+|---|---|
+| Building a feature | Write code first, ask questions later |
+| Reviewing code | Be critical, check every edge case |
+| Debugging | Be systematic, add logging, isolate variables |
+| Explaining concepts | Be pedagogical, include examples |
+| Security audit | Be paranoid, assume worst case |
+
+### Built-in Agents
+
+OpenCode ships with a few built-in agents. You can list them:
+
+```bash
+opencode api get /api/agent
+```
+
+Or in the TUI, type `/agent` to see what's available.
+
+### Custom Agents
+
+You can define your own agents in `opencode.jsonc`:
+
+```jsonc
+{
+  "agents": {
+    "builder": {
+      "description": "Builds features fast. Writes code first, then tests.",
+      "instructions": "Focus on shipping. Write working code, add tests, then ask for feedback.",
+    },
+    "reviewer": {
+      "description": "Reviews code for bugs, security issues, and style problems.",
+      "instructions": "Be thorough and critical. Check every edge case. Suggest specific fixes.",
+    },
+    "teacher": {
+      "description": "Explains concepts with examples, analogies, and exercises.",
+      "instructions": "Assume the user is a junior developer. Use simple language. Include runnable examples.",
+    },
+  },
+}
+```
+
+### Switching Agents
+
+- In the TUI, type `/agent` and pick from the list
+- The session continues with the new instructions
+- Each session remembers its agent
+
+### Practical Example: Two-Agent Workflow
+
+1. **Set agent to `builder`**: *"Add a fibonacci function to the project"*
+2. The builder writes the code and tests
+3. **Switch agent to `reviewer`**: *"Review the fibonacci code I just wrote"*
+4. The reviewer finds issues the builder missed
+5. **Switch back to `builder`**: *"Fix the issues the reviewer found"*
+
+This two-pass workflow catches more bugs than either agent alone.
+
+### Agent Instructions
+
+Agents can reference skills, files, or inline instructions:
+
+```jsonc
+{
+  "agents": {
+    "deployer": {
+      "description": "Handles deployments.",
+      "instructions": [
+        "Follow the deploy skill step by step.",
+        "Ask for approval before pushing to production.",
+      ],
+      "skills": ["deploy"],
+    },
+  },
+}
+```
+
+---
+
+## 17. Context: How the Model Sees Your Codebase
+
+**Context** is everything the model can "see" when responding to you.
+It's the most important concept for getting good results.
+
+### What Goes Into Context
+
+```
+┌─────────────────────────────────────────┐
+│  SYSTEM INSTRUCTIONS                      │
+│  • System prompt (OpenCode's core rules)  │
+│  • Agent instructions                     │
+│  • Loaded skills                          │
+│  • Config file settings                   │
+├─────────────────────────────────────────┤
+│  CONVERSATION HISTORY                     │
+│  • Your messages                          │
+│  • Model's responses                      │
+│  • Tool call results                      │
+├─────────────────────────────────────────┤
+│  REFERENCES                               │
+│  • Files the model has read               │
+│  • Grep/search results                    │
+│  • Web fetch results                      │
+├─────────────────────────────────────────┤
+│  TOOL SCHEMAS                             │
+│  • Available tools and their arguments    │
+│  • Custom tool definitions                │
+└─────────────────────────────────────────┘
+```
+
+### The Context Window
+
+Every model has a **context window** — a maximum number of tokens it can
+process at once.
+
+| Model | Context Window |
+|---|---|
+| DeepSeek V4.1 Flash Free | ~1,000,000 tokens |
+| Claude Sonnet 5.5 | ~200,000 tokens |
+| GPT-5 | ~128,000 tokens |
+
+When the context window fills up, the oldest messages get "forgotten"
+(removed from context).
+
+### Managing Context
+
+**The sidebar shows your context usage:**
+
+```
+Context
+147,529 tokens
+37% used
+$5.56 spent
+```
+
+When usage gets high (80%+), you can:
+
+1. **Start a fresh session** — `/new` clears the slate
+2. **Compact the session** — OpenCode can summarize old messages
+3. **Be more specific** — instead of "fix the bug", say "fix the bug in
+   `src/auth/login.ts` on line 42"
+
+### References: Persistent Context
+
+**References** are files or directories you want in context automatically:
+
+```jsonc
+{
+  "references": [
+    { "type": "local", "path": "docs/architecture.md" },
+    { "type": "local", "path": "CONTRIBUTING.md" },
+  ],
+}
+```
+
+Now every prompt includes the architecture doc and contributing guide
+without you having to ask.
+
+### Git References
+
+You can also reference files from a remote repository:
+
+```jsonc
+{
+  "references": [
+    {
+      "type": "git",
+      "repository": "https://github.com/acme/standards",
+      "branch": "main",
+    },
+  ],
+}
+```
+
+### Practical Example: Use References
+
+1. Add to `opencode.jsonc`:
+
+```jsonc
+{
+  "references": [
+    { "type": "local", "path": "docs/spec.md" },
+    { "type": "local", "path": "README.md" },
+  ],
+}
+```
+
+2. Ask: *"What language features does Sloperator support?"*
+3. The model already has `docs/spec.md` in context — it answers immediately
+   without needing to read any files.
+
+### Instruction Entries: Keyed Context
+
+For dynamic context that changes during a session (like the current
+deployment target or branch), use **instruction entries**:
+
+```
+/instruction set deploy-target production
+```
+
+This injects `<context key="deploy-target">production</context>` into the
+model's instructions. The model sees it on every turn without you repeating it.
+
+---
+
+## 18. Custom Tools via Plugins
+
+When built-in tools aren't enough, you can create **custom tools** using plugins.
+
+### When to Create a Custom Tool
+
+- Querying an internal database
+- Calling a project-specific API
+- Wrapping a complicated script
+- Looking up metadata your repo depends on
+
+### Plugin Architecture
+
+```
+.opencode/
+├── plugins/
+│   └── my-tool.ts     ← The plugin file
+├── package.json        ← Declares @opencode/plugin dependency
+├── bun.lock
+└── node_modules/       ← Installed dependencies
+```
+
+### Practical Example: Create a "run_slop" Tool
+
+**Step 1: Install the dependency**
+
+```bash
+cd .opencode
+bun add @opencode/plugin@2.0.3
+```
+
+**Step 2: Create the plugin**
+
+`.opencode/plugins/run-slop.ts`:
+
+```typescript
+import { spawn } from "node:child_process";
+import { Plugin } from "@opencode/plugin";
+
+export default Plugin.define({
+  id: "run-slop",
+  setup: async (ctx) => {
+    const projectRoot = ctx.location.directory;
+
+    await ctx.tool.transform((tools) => {
+      tools.add({
+        name: "run_slop",
+        description: "Run a .slop file with the Sloperator interpreter",
+        input: {
+          type: "object",
+          properties: {
+            path: { type: "string" },
+          },
+          required: ["path"],
+          additionalProperties: false,
+        },
+        options: { codemode: false },
+        execute: async (input) => {
+          const { path } = input as { path: string };
+          const result = await runWithUv(projectRoot, path);
+          return { content: JSON.stringify(result) };
+        },
+      });
+    });
+  },
+});
+
+function runWithUv(cwd: string, file: string): Promise<any> {
+  return new Promise((resolve) => {
+    const child = spawn("uv", ["run", "--no-active", "sloperator.py", file], { cwd });
+    let stdout = "", stderr = "";
+    child.stdout.on("data", (chunk: string) => { stdout += chunk; });
+    child.stderr.on("data", (chunk: string) => { stderr += chunk; });
+    child.on("close", (code) => {
+      resolve({ stdout, stderr, exitCode: code ?? 1 });
+    });
+  });
+}
+```
+
+**Step 3: Use the tool**
+
+Once the plugin is loaded (OpenCode discovers `.opencode/plugins/` automatically),
+the agent can call `run_slop` directly.
+
+### Step-by-step: Making the Tool Available
+
+1. `cd .opencode && bun add @opencode/plugin@2.0.3`
+2. Add `node_modules/` to `.gitignore`
+3. Create `.opencode/plugins/run-slop.ts` with the code above
+4. Run `/reload` in OpenCode to pick up the new plugin
+5. Ask: *"Run examples/hello.slop with run_slop"*
+
+If the tool isn't available, it means OpenCode hasn't reloaded the plugin yet.
+Use `/reload` or save the config file to trigger a reload.
+
+---
+
+## 19. Tool Permissions
+
+You control which tools the agent can use automatically and which require
+your approval.
+
+### Permission Rules
+
+In `opencode.jsonc`:
+
+```jsonc
+{
+  "permissions": [
+    { "action": "shell", "resource": "*", "effect": "ask" },
+    { "action": "edit", "resource": "*", "effect": "allow" },
+    { "action": "webfetch", "resource": "*", "effect": "deny" },
+  ],
+}
+```
+
+Each rule has three parts:
+
+| Part | What it is | Example |
+|---|---|---|
+| `action` | Which tool or action | `shell`, `edit`, `read`, `webfetch` |
+| `resource` | What it applies to | `*` (everything), `git push *` |
+| `effect` | What happens | `allow`, `ask`, `deny` |
+
+### Evaluation Order
+
+Rules are evaluated **last match wins**:
+
+1. Put broad defaults first
+2. Put narrow exceptions later
+
+```jsonc
+{
+  "permissions": [
+    { "action": "shell", "resource": "*", "effect": "ask" },      // Broad: ask for all shell
+    { "action": "shell", "resource": "bootdev run *", "effect": "allow" },  // Exception: allow bootdev
+  ],
+}
+```
+
+### Practical Example: Configure Permissions
+
+1. Update your `opencode.jsonc`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/deepseek-v4.1-flash-free",
+  "permissions": [
+    { "action": "run_slop", "resource": "*", "effect": "allow" },
+    { "action": "shell", "resource": "*", "effect": "ask" },
+    { "action": "shell", "resource": "bootdev run *", "effect": "allow" },
+  ],
+}
+```
+
+2. Ask the agent to run `pytest -q`
+3. You'll see a permission prompt — approve it once
+4. Ask the agent to run `examples/hello.slop` with `run_slop`
+5. It runs without asking (the `run_slop` rule allows it)
+
+### Default Permissions
+
+| Action | Default |
+|---|---|
+| Most tools | `allow` |
+| `read` on `.env` files | `ask` |
+| `external_directory` | `allow` |
+
+---
+
+## 20. Sandboxing
+
+Letting an AI agent access your files and run commands is powerful — and
+potentially dangerous. **Sandboxing** limits what the agent can affect.
+
+### When to Sandbox
+
+- Running unfamiliar code or install scripts
+- Working near sensitive data
+- Running autonomously with fewer approval prompts
+- Reviewing code from untrusted sources
+
+### Sandboxing Options
+
+| Method | How It Works | Isolation Level |
+|---|---|---|
+| **Docker container** | Run OpenCode inside a container | Medium |
+| **Docker Sandbox** | Docker with restricted mounts | High |
+| **Separate machine** | Dedicated dev machine or cloud VM | Highest |
+| **Virtual machine** | Full VM with limited access | Very High |
+
+### Practical Example: Docker Sandbox
+
+```bash
+# Run OpenCode in a Docker container with limited access
+docker run -it \
+  -v /path/to/project:/workspace:ro \  # Read-only access to project
+  -e OPENCODE_PASSWORD="password" \
+  opencode/opencode serve
+```
+
+The agent can only access what you mount into the container. Write access
+is controlled by mount permissions.
+
+### Key Safety Rules
+
+1. **Don't share credentials** with the container unless necessary
+2. **Read-only mounts** for source code you don't want changed
+3. **Network restrictions** to limit what the agent can access
+4. **Review dangerous actions** with permission rules before going autonomous
+
+---
+
+## 21. Connecting Providers
+
+OpenCode needs to be connected to at least one provider to work.
+Here's how to add a provider manually.
+
+### Using /connect
+
+In the TUI, type:
+
+```
+/connect
+```
+
+This shows a list of supported providers (OpenAI, Anthropic, Google, etc.).
+Select one, paste your API key, and you're done.
+
+### Custom / OpenAI-Compatible Provider
+
+For providers like SovereignEG that use the OpenAI-compatible API:
+
+1. In the TUI, type `/connect` and choose **Other**
+2. Enter a provider ID (e.g., `sovereigneg`)
+3. Paste your API key
+4. OpenCode configures itself automatically
+
+### Manual Config
+
+If you prefer to configure by hand, add the provider to `opencode.jsonc`:
+
+```jsonc
+{
+  "providers": {
+    "sovereigneg": {
+      "name": "SovereignEG",
+      "env": ["SOVEREIGNEG_API_KEY"],
+      "package": "@opencode/ai/providers/openai-compatible",
+      "settings": {
+        "baseURL": "https://backend.sovereigneg.com/v1"
+      },
+      "models": {
+        "deepseek-v4-flash": {
+          "name": "DeepSeek V4 Flash",
+          "limit": {
+            "context": 1048576,
+            "output": 16384
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+| Field | Purpose |
+|---|---|
+| `name` | Display name in the UI |
+| `env` | Environment variable(s) that hold the API key |
+| `package` | The adapter package (OpenAI-compatible for most) |
+| `settings.baseURL` | The API endpoint URL |
+| `models` | Which models this provider offers |
+| `limit.context` | Maximum context window in tokens |
+| `limit.output` | Maximum output tokens |
+
+### Using Environment Variables
+
+Instead of `/connect`, you can set the API key via environment:
+
+```bash
+export SOVEREIGNEG_API_KEY="sk-..."
+```
+
+And reference it in config:
+
+```jsonc
+{
+  "providers": {
+    "sovereigneg": {
+      "settings": {
+        "apiKey": "{env:SOVEREIGNEG_API_KEY}",
+      },
+    },
+  },
+}
+```
+
+### Select the Model
+
+After connecting, run `/models` in the TUI and pick your model.
+The model selector shows every model from every connected provider.
+
+---
+
+## 22. End-to-End Practical Example
+
+Let's put it all together. We'll use OpenCode to build and test a complete
+feature for the Sloperator project.
+
+### The Task
+
+Add a `vibe` (if) / `ralph` (while) example to the Sloperator project, then
+configure OpenCode properly for the workflow.
+
+### Step 1: Start a Session
+
+```bash
+cd /path/to/sloperator
+opencode
+```
+
+### Step 2: Set Up Config
+
+Tell OpenCode: *"Create opencode.jsonc with the DeepSeek Free model, allow run_slop,
+ask for all shell commands except bootdev run, which is allowed."*
+
+The agent creates:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/deepseek-v4.1-flash-free",
+  "permissions": [
+    { "action": "run_slop", "resource": "*", "effect": "allow" },
+    { "action": "shell", "resource": "*", "effect": "ask" },
+    { "action": "shell", "resource": "bootdev run *", "effect": "allow" },
+  ],
+}
+```
+
+### Step 3: Create the Example
+
+Tell OpenCode: *"Create examples/conditions.slop that demonstrates vibe (if) and
+ralph (while). It should count from 1 to 5 using ralph, and use vibe to say
+whether each number is even or odd."*
+
+The agent:
+1. Reads `docs/spec.md` to learn the syntax
+2. Reads `examples/hello.slop` for style
+3. Creates the file:
+
+```slop
+— Count from 1 to 5, saying even or odd
+slop i = 1✨
+ralph (i <= 5) {
+    vibe (i % 2 == 0) {
+        hallucinate(i + “ is even”)✨
+    }
+    nah {
+        hallucinate(i + “ is odd”)✨
+    }
+    slop i = i + 1✨
+}
+```
+
+4. Runs it with `run_slop` to verify
+
+### Step 4: Add a Test
+
+Tell OpenCode: *"Add a test for examples/conditions.slop in tests/test_examples.py"*
+
+The agent:
+1. Reads `tests/test_examples.py` for the pattern
+2. Adds a test case
+3. Runs `pytest -q` to confirm
+
+### Step 5: Verify Everything
+
+Tell OpenCode: *"Run all tests and confirm everything passes"*
+
+```bash
+uv run pytest -q
+```
+
+### Step 6: Use Web UI to Review
+
+```bash
+opencode pair
+```
+
+Open the link on your phone and review the changes from there.
+
+### Step 7: Switch Models for a Second Opinion
+
+```bash
+opencode run --model "opencode/deepseek-v4.1-flash-free" \
+  "Review examples/conditions.slop and tests/test_examples.py for bugs"
+```
+
+### What You've Learned
+
+| Concept | Where You Used It |
+|---|---|
+| **Config** | Set up `opencode.jsonc` with model and permissions |
+| **TUI** | Main session for creating the example |
+| **Tools** | Agent used `read`, `write`, `edit`, `shell` automatically |
+| **Custom tool** | Agent used `run_slop` to test the example |
+| **Permissions** | `run_slop` ran without asking, `shell` asked first |
+| **Skills** | Could use a `review` skill to check the conditions code |
+| **Agents** | Could switch between `builder` and `reviewer` agents |
+| **Context** | References in config keep `docs/spec.md` always in context |
+| **Web UI** | Reviewed changes from phone |
+| **OpenCode Run** | Got a second opinion from a fresh session |
+| **Testing** | `pytest` confirmed everything works |
+
+---
+
+## Quick Reference
+
+### Essential Commands
+
+```bash
+opencode                    # Open the TUI
+opencode run "prompt"       # One-shot prompt
+opencode pair               # Generate Web UI link
+opencode pair --remote      # Generate remote (mobile) link
+opencode models             # List available models
+opencode service status     # Check if server is running
+opencode service restart    # Restart the background server
+```
+
+### Config File Structure
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "provider/model-id",
+  "permissions": [
+    { "action": "tool", "resource": "pattern", "effect": "allow|ask|deny" },
+  ],
+  "providers": {
+    "provider-name": {
+      "settings": { "apiKey": "{env:VARIABLE}" },
+      "models": { "model-id": { "name": "Human Name" } },
+    },
+  },
+}
+```
+
+### Key Concepts
+
+| Concept | Summary |
+|---|---|
+| **Agent harness** | OpenCode itself — it runs the tools |
+| **LLM / Model** | The "brain" that decides what to do |
+| **Provider** | Who serves the model to you |
+| **Tool** | A function the agent can call |
+| **Skill** | Reusable instructions (a playbook for a task) |
+| **Agent** | A named configuration/persona for the assistant |
+| **Context** | Everything the model can see (history, files, instructions) |
+| **Plugin** | Adds custom tools and features |
+| **Permission** | Controls which tools run automatically |
+| **Token** | Unit of text the model processes |
+| **Variant** | A model configuration (e.g., reasoning level) |
+| **Sandbox** | Isolated environment for safety |
+
+---
+
+> **Next steps**: Join the OpenCode community, check the docs at
+> [opencode.ai/docs](https://opencode.ai/docs), and start using OpenCode
+> on your real projects. The best way to learn is by doing — pick a small
+> task and let the agent help you.
